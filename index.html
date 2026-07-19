@@ -52,6 +52,7 @@
     min-width:240px;
   }
   .player-box{
+    position:relative;
     background:#000;
     border-radius:10px;
     overflow:hidden;
@@ -62,6 +63,51 @@
     display:block;
     background:#000;
     aspect-ratio:16/9;
+  }
+  .spinner-overlay{
+    position:absolute;
+    inset:0;
+    background:rgba(0,0,0,0.55);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    gap:10px;
+    color:#fff;
+    font-size:13px;
+  }
+  .spinner-overlay.show{display:flex;}
+  .spinner{
+    width:34px;height:34px;
+    border:3px solid rgba(255,255,255,0.25);
+    border-top-color:#fff;
+    border-radius:50%;
+    animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin{ to { transform:rotate(360deg); } }
+  .error-overlay{
+    position:absolute;
+    inset:0;
+    background:rgba(20,20,20,0.85);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    gap:8px;
+    color:#fff;
+    text-align:center;
+    padding:20px;
+  }
+  .error-overlay.show{display:flex;}
+  .error-overlay .msg{font-size:13px; color:#f3f4f6;}
+  .retry-btn{
+    background:var(--accent);
+    color:#fff;
+    border:none;
+    padding:7px 16px;
+    border-radius:6px;
+    font-size:12px;
+    cursor:pointer;
   }
   .controls{
     background:var(--panel);
@@ -121,16 +167,26 @@
     display:flex;
     align-items:center;
     gap:8px;
-    padding:10px 12px;
+    padding:12px;
     border-bottom:1px solid var(--border);
+    border-left:3px solid transparent;
     cursor:pointer;
     font-size:13px;
+    transition:background 0.15s ease, border-left-color 0.15s ease;
   }
   .channel-item:last-child{border-bottom:none;}
   .channel-item:hover{background:var(--bg);}
   .channel-item.active{
     background:#eef2ff;
-    border-left:3px solid var(--accent);
+    border-left-color:var(--accent);
+    font-weight:600;
+  }
+  .now-playing{
+    font-size:9px;
+    color:#fff;
+    background:var(--accent);
+    padding:2px 6px;
+    border-radius:4px;
   }
   .dot{
     width:8px;height:8px;border-radius:50%;
@@ -173,6 +229,14 @@
     <div class="player-col">
       <div class="player-box">
         <video id="video" controls playsinline></video>
+        <div class="spinner-overlay" id="spinnerOverlay">
+          <div class="spinner"></div>
+          <div id="spinnerText">লোড হচ্ছে...</div>
+        </div>
+        <div class="error-overlay" id="errorOverlay">
+          <div class="msg" id="errorMsg">এই চ্যানেল এখন চলছে না।</div>
+          <button class="retry-btn" id="retryBtn">আবার চেষ্টা করো</button>
+        </div>
       </div>
       <div class="controls">
         <div class="quality-group" id="qualityGroup">
@@ -217,10 +281,35 @@ const statusText = document.getElementById('statusText');
 const logBox = document.getElementById('log');
 const channelListEl = document.getElementById('channelList');
 const dataSaverBox = document.getElementById('dataSaver');
+const spinnerOverlay = document.getElementById('spinnerOverlay');
+const spinnerText = document.getElementById('spinnerText');
+const errorOverlay = document.getElementById('errorOverlay');
+const errorMsg = document.getElementById('errorMsg');
+const retryBtn = document.getElementById('retryBtn');
 
 let hls = null;
 let activeIndex = -1;
 let channelItems = [];
+
+function showSpinner(text){
+  spinnerText.textContent = text || 'লোড হচ্ছে...';
+  spinnerOverlay.classList.add('show');
+  errorOverlay.classList.remove('show');
+}
+function hideSpinner(){
+  spinnerOverlay.classList.remove('show');
+}
+function showError(text){
+  errorMsg.textContent = text || 'এই চ্যানেল এখন চলছে না।';
+  errorOverlay.classList.add('show');
+  spinnerOverlay.classList.remove('show');
+}
+function hideError(){
+  errorOverlay.classList.remove('show');
+}
+retryBtn.onclick = () => {
+  if (activeIndex >= 0) loadChannel(activeIndex);
+};
 
 function log(msg){
   const t = new Date().toLocaleTimeString();
@@ -235,7 +324,7 @@ function buildList(){
     item.innerHTML = `
       <span class="dot" id="dot-${idx}"></span>
       <span class="ch-name">${ch.name}</span>
-      <span class="ch-tag">LIVE</span>
+      <span class="ch-tag" id="tag-${idx}">LIVE</span>
     `;
     item.onclick = () => loadChannel(idx);
     channelListEl.appendChild(item);
@@ -244,8 +333,16 @@ function buildList(){
 }
 
 function setActiveItem(idx){
-  channelItems.forEach(el => el.classList.remove('active'));
-  if (idx >= 0) channelItems[idx].classList.add('active');
+  channelItems.forEach((el, i) => {
+    el.classList.remove('active');
+    const tag = document.getElementById('tag-' + i);
+    if (tag) { tag.textContent = 'LIVE'; tag.classList.remove('now-playing'); }
+  });
+  if (idx >= 0) {
+    channelItems[idx].classList.add('active');
+    const tag = document.getElementById('tag-' + idx);
+    if (tag) { tag.textContent = '▶ Playing'; tag.classList.add('now-playing'); }
+  }
 }
 
 function setDot(idx, state){
@@ -262,6 +359,8 @@ function loadChannel(idx){
   statusText.textContent = "Connecting...";
   qualityGroup.innerHTML = '<span class="status">লোড হচ্ছে...</span>';
   log("Loading: " + ch.name);
+  showSpinner('Connecting: ' + ch.name);
+  hideError();
 
   if (hls) {
     hls.destroy();
@@ -272,10 +371,36 @@ function loadChannel(idx){
     hls = new Hls({
       capLevelToPlayerSize: false,
       maxBufferLength: 15,
-      startLevel: 0
+      startLevel: 0,
+      lowLatencyMode: true,
+      liveSyncDurationCount: 1,
+      liveMaxLatencyDurationCount: 3,
+      maxLiveSyncPlaybackRate: 1.5,
+      backBufferLength: 0
     });
     hls.loadSource(ch.url);
     hls.attachMedia(video);
+
+    video.addEventListener('canplay', function jumpToLive() {
+      if (video.duration && isFinite(video.duration)) {
+        video.currentTime = video.duration - 0.5;
+      }
+      video.removeEventListener('canplay', jumpToLive);
+    });
+
+    if (window._syncInterval) clearInterval(window._syncInterval);
+    window._syncInterval = setInterval(() => {
+      if (!video.duration || !isFinite(video.duration)) return;
+      const gap = video.duration - video.currentTime;
+      if (gap > 6) {
+        video.currentTime = video.duration - 1;
+        log("Delay বেশি হয়ে গেছিলো, live edge এ জাম্প করা হলো");
+      } else if (gap > 3) {
+        video.playbackRate = 1.08;
+      } else {
+        video.playbackRate = 1.0;
+      }
+    }, 3000);
 
     hls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
       statusText.textContent = "Playing (144p locked): " + ch.name;
@@ -296,6 +421,7 @@ function loadChannel(idx){
       log("Locked to lowest level: index " + lowestIdx + " (" + (lowestHeight === Infinity ? "unknown" : lowestHeight + "p") + ")");
 
       buildQualityButtons(data.levels, lowestIdx);
+      hideSpinner();
       video.play().catch(e => log("Tap play to start (autoplay blocked)."));
     });
 
@@ -308,17 +434,24 @@ function loadChannel(idx){
       if (data.fatal) {
         statusText.textContent = "Failed: " + ch.name;
         setDot(idx, 'fail');
+        showError('"' + ch.name + '" এখন চলছে না। লিংক dead অথবা ব্লকড হতে পারে।');
       }
     });
+
+    video.addEventListener('waiting', () => showSpinner('Buffering...'));
+    video.addEventListener('playing', () => hideSpinner());
 
   } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
     video.src = ch.url;
     statusText.textContent = "Playing (native): " + ch.name;
     setDot(idx, 'ok');
     qualityGroup.innerHTML = '<span class="status">Native player, auto quality</span>';
+    video.addEventListener('canplay', () => hideSpinner(), { once:true });
+    video.addEventListener('error', () => showError('"' + ch.name + '" এখন চলছে না।'));
   } else {
     statusText.textContent = "HLS not supported";
     setDot(idx, 'fail');
+    showError('তোমার ব্রাউজার এই ফরম্যাট সাপোর্ট করে না।');
   }
 }
 
