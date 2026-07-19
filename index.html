@@ -1,482 +1,353 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="bn">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Live Player</title>
+<title>Channel Demo Player</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: #F4F1EA;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
+  :root{
+    --bg:#f5f6f8;
+    --panel:#ffffff;
+    --border:#e2e5ea;
+    --text:#1a1d23;
+    --muted:#6b7280;
+    --accent:#2563eb;
+    --green:#16a34a;
+    --red:#dc2626;
   }
-  .wrap {
-    width: 100%;
-    max-width: 900px;
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding:16px;
   }
-  .video-box {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 16/9;
-    background: #111;
-    border-radius: 10px;
-    overflow: hidden;
+  .wrap{
+    max-width:900px;
+    margin:0 auto;
   }
-  .overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0,0,0,0.55);
-    color: #fff;
-    font-size: 14px;
-    text-align: center;
-    padding: 20px;
+  h1{
+    font-size:18px;
+    font-weight:600;
+    margin:0 0 4px;
   }
-  video {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    background: #000;
+  p.sub{
+    margin:0 0 16px;
+    color:var(--muted);
+    font-size:13px;
   }
-  .hidden { display: none; }
-  .gear-btn {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    background: rgba(0,0,0,0.55);
-    color: #fff;
-    border: none;
-    font-size: 16px;
-    cursor: pointer;
-    z-index: 5;
+  .layout{
+    display:flex;
+    gap:16px;
+    flex-wrap:wrap;
   }
-  .settings-panel {
-    position: absolute;
-    top: 50px;
-    right: 10px;
-    background: rgba(20,20,20,0.92);
-    color: #fff;
-    border-radius: 8px;
-    padding: 10px 12px;
-    width: 200px;
-    z-index: 6;
+  .player-col{
+    flex:1 1 380px;
+    min-width:280px;
   }
-  .settings-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 0;
-    font-size: 13px;
+  .list-col{
+    flex:1 1 260px;
+    min-width:240px;
   }
-  .settings-row select,
-  .settings-row button {
-    border: none;
-    background: #333;
-    color: #fff;
-    padding: 4px 8px;
-    border-radius: 5px;
-    font-size: 12px;
-    cursor: pointer;
+  .player-box{
+    background:#000;
+    border-radius:10px;
+    overflow:hidden;
+    border:1px solid var(--border);
   }
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #999;
-    display: inline-block;
+  video{
+    width:100%;
+    display:block;
+    background:#000;
+    aspect-ratio:16/9;
   }
-  .dot.live { background: #2fa84f; }
-  .dot.retry { background: #d9a02f; }
-  .dot.dead { background: #c0392b; }
+  .controls{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-top:none;
+    border-radius:0 0 10px 10px;
+    padding:10px 12px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:8px;
+    font-size:12px;
+  }
+  .quality-group{
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+  }
+  button.q-btn{
+    background:var(--bg);
+    border:1px solid var(--border);
+    color:var(--text);
+    padding:5px 10px;
+    border-radius:6px;
+    font-size:12px;
+    cursor:pointer;
+  }
+  button.q-btn.active{
+    background:var(--accent);
+    color:#fff;
+    border-color:var(--accent);
+  }
+  .status{
+    font-size:12px;
+    color:var(--muted);
+  }
+  .save-toggle{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:12px;
+    color:var(--muted);
+    margin:10px 0;
+    background:var(--panel);
+    border:1px solid var(--border);
+    padding:8px 10px;
+    border-radius:8px;
+  }
+  .channel-list{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:10px;
+    overflow:hidden;
+  }
+  .channel-item{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:10px 12px;
+    border-bottom:1px solid var(--border);
+    cursor:pointer;
+    font-size:13px;
+  }
+  .channel-item:last-child{border-bottom:none;}
+  .channel-item:hover{background:var(--bg);}
+  .channel-item.active{
+    background:#eef2ff;
+    border-left:3px solid var(--accent);
+  }
+  .dot{
+    width:8px;height:8px;border-radius:50%;
+    background:var(--muted);
+    flex-shrink:0;
+  }
+  .dot.ok{background:var(--green);}
+  .dot.fail{background:var(--red);}
+  .ch-name{flex:1;}
+  .ch-tag{
+    font-size:10px;
+    color:var(--muted);
+    background:var(--bg);
+    padding:2px 6px;
+    border-radius:4px;
+  }
+  .log{
+    margin-top:12px;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:10px 12px;
+    font-size:11px;
+    color:var(--muted);
+    max-height:110px;
+    overflow-y:auto;
+    font-family:monospace;
+  }
+  @media (max-width:640px){
+    .layout{flex-direction:column;}
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="video-box">
-    <video id="video" playsinline autoplay muted controls></video>
-    <div id="overlay" class="overlay hidden">Reconnecting...</div>
+  <h1>Channel Demo Player</h1>
+  <p class="sub">লিস্ট থেকে চ্যানেল সিলেক্ট করো। Low-data mode ডিফল্ট অন।</p>
 
-    <button id="gearBtn" class="gear-btn" aria-label="Settings">⚙</button>
+  <div class="layout">
+    <div class="player-col">
+      <div class="player-box">
+        <video id="video" controls playsinline></video>
+      </div>
+      <div class="controls">
+        <div class="quality-group" id="qualityGroup">
+          <span class="status">চ্যানেল সিলেক্ট করো</span>
+        </div>
+        <div class="status" id="statusText">Idle</div>
+      </div>
 
-    <div id="settingsPanel" class="settings-panel hidden">
-      <div class="settings-row">
-        <span>Status</span>
-        <span><span id="dot" class="dot"></span> <span id="statusText">Connecting</span></span>
-      </div>
-      <div class="settings-row">
-        <span>Quality</span>
-        <select id="qualitySelect">
-          <option value="-1">Auto</option>
-          <option value="audio">Audio Only (data saver)</option>
-        </select>
-      </div>
-      <div class="settings-row">
-        <span>Latency</span>
-        <button id="modeBtn">Live</button>
-      </div>
-      <div class="settings-row">
-        <span>Sound</span>
-        <button id="unmuteBtn">Unmute</button>
-      </div>
+      <label class="save-toggle">
+        <input type="checkbox" id="dataSaver" checked>
+        Low-data mode (ছোট quality দিয়ে শুরু হবে, মোবাইল কম গরম হবে)
+      </label>
+
+      <div class="log" id="log"></div>
+    </div>
+
+    <div class="list-col">
+      <div class="channel-list" id="channelList"></div>
     </div>
   </div>
-  <div id="debugLog" style="margin-top:10px; font-size:11px; color:#555; background:#eee; border-radius:6px; padding:8px; max-height:120px; overflow-y:auto; white-space:pre-wrap; font-family:monospace;"></div>
 </div>
 
 <script>
-const STREAM_URL = "https://live01-cn-ali.bvjicd.com/live/79361366.m3u8";
+const CHANNELS = [
+  { name: "Channel 1", url: "https://andro.evrenesoglu57.click/checklist/androstreamliveexn4.m3u8" },
+  { name: "Channel 2", url: "https://pull.niues.live/live/stream-9912060_lhd.m3u8" },
+  { name: "Channel 3", url: "https://deviantart.lovetier.bz/TSN3/tracks-v1a1/mono.m3u8" },
+  { name: "Channel 4", url: "https://deviantart.lovetier.bz/TSN4/tracks-v1a1/mono.m3u8" },
+  { name: "Channel 5", url: "https://tfxo0gr4uqmtt8y41hcjugwzdkpjpptwzc3jt.100ycdn.com/live1.streambylivepulse.com/live/channel16/playlist.m3u8" },
+  { name: "Channel 6", url: "https://live01-cn-ali.bvjicd.com/live/79361366.m3u8" },
+  { name: "Channel 7", url: "https://andro.226503.xyz/checklist/androstreamlivebs1.m3u8" },
+  { name: "Channel 8", url: "https://sg1.livetv247.eu.cc/img/sg1.m3u8" },
+  { name: "Channel 9", url: "https://nl1.livetv247.eu.cc/img/nl.m3u8" },
+  { name: "Channel 10 (Dazn)", url: "https://fiveo4.vilevodules.uk/main/secure/40464a500b175347b1a89cc52e9b279e608b747c9b20c5f664d8e971e24a9969/1784148635/daznmundial-es.m3u8" },
+  { name: "Channel 11 (beIN)", url: "https://fiveo4.vilevodules.uk/main/secure/1666f34d0b7fe74bf937fa9e29d903c7541e4f7b348dcdd25fa97cfad44aba9b/1784148859/beinsportsmax-sa.m3u8" },
+  { name: "Channel 12", url: "https://tv.topmediatv.net:25463/live/TopMediaWeb/bOteTR8ED1/8631.m3u8" }
+];
+
 const video = document.getElementById('video');
-const overlay = document.getElementById('overlay');
-const dot = document.getElementById('dot');
+const qualityGroup = document.getElementById('qualityGroup');
 const statusText = document.getElementById('statusText');
-const unmuteBtn = document.getElementById('unmuteBtn');
-const qualitySelect = document.getElementById('qualitySelect');
-const modeBtn = document.getElementById('modeBtn');
-const gearBtn = document.getElementById('gearBtn');
-const settingsPanel = document.getElementById('settingsPanel');
-const debugLog = document.getElementById('debugLog');
-
-function logDebug(msg) {
-  const time = new Date().toLocaleTimeString();
-  debugLog.textContent = `[${time}] ${msg}\n` + debugLog.textContent;
-}
-
-gearBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  settingsPanel.classList.toggle('hidden');
-});
-document.addEventListener('click', (e) => {
-  if (!settingsPanel.contains(e.target) && e.target !== gearBtn) {
-    settingsPanel.classList.add('hidden');
-  }
-});
-settingsPanel.addEventListener('click', (e) => e.stopPropagation());
-
-modeBtn.addEventListener('click', () => {
-  userMode = (userMode === 'stable') ? 'live' : 'stable';
-  recentStalls = 0;
-  modeBtn.textContent = userMode === 'stable' ? 'Stable' : 'Live';
-  applyBufferProfile();
-});
-
-function populateQualityOptions() {
-  if (!hls || !hls.levels || hls.levels.length === 0) return;
-  qualitySelect.innerHTML = '<option value="-1">Auto</option>';
-  hls.levels.forEach((level, idx) => {
-    const label = level.height ? level.height + 'p' : Math.round(level.bitrate/1000) + 'kbps';
-    const opt = document.createElement('option');
-    opt.value = idx;
-    opt.textContent = label;
-    qualitySelect.appendChild(opt);
-  });
-  const audioOpt = document.createElement('option');
-  audioOpt.value = 'audio';
-  audioOpt.textContent = 'Audio Only (data saver)';
-  qualitySelect.appendChild(audioOpt);
-  qualitySelect.value = '-1';
-}
-
-qualitySelect.addEventListener('change', () => {
-  if (!hls) return;
-  const val = qualitySelect.value;
-  if (val === 'audio') {
-    video.style.display = 'none';
-    hls.currentLevel = 0;
-    hls.autoLevelCapping = 0;
-  } else {
-    video.style.display = 'block';
-    hls.currentLevel = parseInt(val, 10);
-  }
-});
+const logBox = document.getElementById('log');
+const channelListEl = document.getElementById('channelList');
+const dataSaverBox = document.getElementById('dataSaver');
 
 let hls = null;
-let retryDelay = 1000;
-const maxRetryDelay = 15000;
-let retryTimer = null;
-let lastPlayheadTime = 0;
-let stallCount = 0;
-let watchdogTimer = null;
-let catchUpTimer = null;
-let preemptTimer = null;
+let activeIndex = -1;
+let channelItems = [];
 
-let userMode = 'live'; // 'stable' or 'live'
-let recentStalls = 0;
-let stableSince = Date.now();
-
-const PROFILES = {
-  stable: { sync: 15, maxLatency: 35, maxBuf: 60, backBuf: 30 },
-  live:   { sync: 3,  maxLatency: 8,  maxBuf: 12, backBuf: 8 }
-};
-
-function currentProfile() {
-  return PROFILES[userMode];
+function log(msg){
+  const t = new Date().toLocaleTimeString();
+  logBox.innerHTML += `[${t}] ${msg}<br>`;
+  logBox.scrollTop = logBox.scrollHeight;
 }
 
-function applyBufferProfile() {
-  if (!hls) return;
-  const p = currentProfile();
-  hls.config.liveSyncDuration = p.sync;
-  hls.config.liveMaxLatencyDuration = p.maxLatency;
-  hls.config.maxBufferLength = p.maxBuf;
-  hls.config.maxMaxBufferLength = p.maxBuf * 2;
-  hls.config.backBufferLength = p.backBuf;
+function buildList(){
+  CHANNELS.forEach((ch, idx) => {
+    const item = document.createElement('div');
+    item.className = 'channel-item';
+    item.innerHTML = `
+      <span class="dot" id="dot-${idx}"></span>
+      <span class="ch-name">${ch.name}</span>
+      <span class="ch-tag">LIVE</span>
+    `;
+    item.onclick = () => loadChannel(idx);
+    channelListEl.appendChild(item);
+    channelItems.push(item);
+  });
 }
 
-function onStallDetected() {
-  recentStalls++;
-  stableSince = Date.now();
-  // auto-relax toward stable if user is on live and hitting stalls
-  if (userMode === 'live' && recentStalls >= 2) {
-    userMode = 'stable';
-    modeBtn.textContent = 'Stable (auto)';
-    applyBufferProfile();
+function setActiveItem(idx){
+  channelItems.forEach(el => el.classList.remove('active'));
+  if (idx >= 0) channelItems[idx].classList.add('active');
+}
+
+function setDot(idx, state){
+  const dot = document.getElementById('dot-' + idx);
+  if (!dot) return;
+  dot.classList.remove('ok','fail');
+  if (state) dot.classList.add(state);
+}
+
+function loadChannel(idx){
+  activeIndex = idx;
+  setActiveItem(idx);
+  const ch = CHANNELS[idx];
+  statusText.textContent = "Connecting...";
+  qualityGroup.innerHTML = '<span class="status">লোড হচ্ছে...</span>';
+  log("Loading: " + ch.name);
+
+  if (hls) {
+    hls.destroy();
+    hls = null;
   }
-}
-
-function checkAutoTighten() {
-  // if stable for 90s straight and user hasn't manually forced live, allow tightening back is manual-only
-  if (Date.now() - stableSince > 90000) recentStalls = 0;
-}
-
-function getConnectionSpeed() {
-  const conn = navigator.connection || navigator.webkitConnection || navigator.mozConnection;
-  if (!conn) return 'unknown';
-  return conn.effectiveType || 'unknown';
-}
-
-function shouldLockLowQuality() {
-  const speed = getConnectionSpeed();
-  return speed === '2g' || speed === 'slow-2g' || speed === '3g';
-}
-
-function startWatchdog() {
-  clearInterval(watchdogTimer);
-  watchdogTimer = setInterval(() => {
-    if (video.paused || video.ended) return;
-    const current = video.currentTime;
-    if (Math.abs(current - lastPlayheadTime) < 0.15) {
-      stallCount++;
-      onStallDetected();
-      if (stallCount >= 2) {
-        setStatus('retry', 'Recovering');
-        if (hls) {
-          try {
-            const buffered = video.buffered;
-            if (buffered.length > 0) {
-              const safeSeek = buffered.end(buffered.length - 1) - 1;
-              if (safeSeek > video.currentTime) video.currentTime = safeSeek;
-            }
-          } catch(e) {}
-          if (stallCount >= 4) {
-            stallCount = 0;
-            startPlayer();
-          }
-        }
-      }
-    } else {
-      stallCount = 0;
-    }
-    lastPlayheadTime = current;
-  }, 4000);
-}
-
-function startCatchUp() {
-  clearInterval(catchUpTimer);
-  video.playbackRate = 1.0;
-  catchUpTimer = setInterval(() => {
-    if (video.paused || video.ended || !video.buffered.length) return;
-    try {
-      const bufEnd = video.buffered.end(video.buffered.length - 1);
-      const gap = bufEnd - video.currentTime;
-
-      // gap too small = risk of stutter soon, jump past the hole
-      if (gap < 0.3 && gap >= 0) {
-        const jumpTo = Math.min(bufEnd - 0.05, video.currentTime + 0.5);
-        if (jumpTo > video.currentTime) video.currentTime = jumpTo;
-      }
-    } catch(e) {}
-  }, 1000);
-}
-
-function startPreemptiveGuard() {
-  clearInterval(preemptTimer);
-  preemptTimer = setInterval(() => {
-    if (!hls || !hls.levels || !hls.levels.length) return;
-    if (qualitySelect.value !== '-1') return; // manual override, don't interfere
-
-    const conn = navigator.connection || navigator.webkitConnection;
-    if (!conn || !conn.downlink) return;
-
-    const downlinkBps = conn.downlink * 1000 * 1000; // Mbps -> bps
-    const safeBudget = downlinkBps * 0.6; // 40% safety margin
-
-    const cur = hls.currentLevel >= 0 ? hls.currentLevel : hls.loadLevel;
-    const curLevel = hls.levels[cur];
-    if (!curLevel) return;
-
-    if (curLevel.bitrate > safeBudget) {
-      // step down one level early, before buffer actually starves
-      let target = cur;
-      for (let i = cur; i >= 0; i--) {
-        if (hls.levels[i].bitrate <= safeBudget) { target = i; break; }
-        target = i;
-      }
-      if (target < cur) hls.nextLevel = target;
-    } else if (cur < hls.levels.length - 1) {
-      const nextLevel = hls.levels[cur + 1];
-      if (nextLevel.bitrate <= safeBudget) {
-        hls.nextLevel = cur + 1; // safe to step up
-      }
-    }
-  }, 5000);
-}
-
-function setStatus(state, text) {
-  dot.className = 'dot ' + state;
-  statusText.textContent = text;
-  overlay.classList.toggle('hidden', state !== 'retry');
-}
-
-function startPlayer() {
-  if (hls) { hls.destroy(); hls = null; }
-  clearTimeout(retryTimer);
-  clearInterval(watchdogTimer);
-  clearInterval(catchUpTimer);
-  clearInterval(preemptTimer);
-  stallCount = 0;
-  recentStalls = 0;
-  stableSince = Date.now();
 
   if (Hls.isSupported()) {
-    const p = currentProfile();
     hls = new Hls({
-      lowLatencyMode: false,
-      maxBufferLength: p.maxBuf,
-      maxMaxBufferLength: p.maxBuf * 2,
-      maxBufferSize: 60 * 1000 * 1000,
-      liveSyncDuration: p.sync,
-      liveMaxLatencyDuration: p.maxLatency,
-      backBufferLength: p.backBuf,
-      startLevel: 0,
-      abrEwmaDefaultEstimate: 300000,
-      abrBandWidthFactor: 0.7,
-      abrBandWidthUpFactor: 0.5,
-      manifestLoadingMaxRetry: 10,
-      manifestLoadingRetryDelay: 1000,
-      levelLoadingMaxRetry: 10,
-      fragLoadingMaxRetry: 10,
-      fragLoadingRetryDelay: 1000,
-      nudgeMaxRetry: 10
+      capLevelToPlayerSize: false,
+      maxBufferLength: 15,
+      startLevel: 0
     });
-
-    hls.loadSource(STREAM_URL);
+    hls.loadSource(ch.url);
     hls.attachMedia(video);
-    logDebug('hls.js attached, loading manifest...');
 
-    hls.on(Hls.Events.MANIFEST_PARSED, function() {
-      setStatus('live', 'Live');
-      retryDelay = 1000;
-      if (shouldLockLowQuality()) {
-        hls.currentLevel = 0;
-        hls.autoLevelCapping = 0;
-      }
-      populateQualityOptions();
-      video.play().catch(()=>{});
-      startWatchdog();
-      startCatchUp();
-      startPreemptiveGuard();
+    hls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
+      statusText.textContent = "Playing (144p locked): " + ch.name;
+      setDot(idx, 'ok');
+      log("Manifest loaded. Levels: " + data.levels.length);
+
+      let lowestIdx = 0;
+      let lowestHeight = Infinity;
+      data.levels.forEach((lvl, i) => {
+        const h = lvl.height || Infinity;
+        if (h < lowestHeight) {
+          lowestHeight = h;
+          lowestIdx = i;
+        }
+      });
+      hls.currentLevel = lowestIdx;
+      hls.autoLevelCapping = lowestIdx;
+      log("Locked to lowest level: index " + lowestIdx + " (" + (lowestHeight === Infinity ? "unknown" : lowestHeight + "p") + ")");
+
+      buildQualityButtons(data.levels, lowestIdx);
+      video.play().catch(e => log("Tap play to start (autoplay blocked)."));
     });
 
     hls.on(Hls.Events.LEVEL_SWITCHED, function(event, data) {
-      if (qualitySelect.value === '-1') {
-        qualitySelect.dataset.activeLevel = data.level;
-      }
+      log("Quality switched to level " + data.level);
     });
 
     hls.on(Hls.Events.ERROR, function(event, data) {
+      log("ERROR (" + ch.name + "): " + data.type + " - " + data.details);
       if (data.fatal) {
-        setStatus('retry', 'Reconnecting');
-        logDebug('FATAL: ' + data.type + ' / ' + data.details + (data.response ? ' / status ' + data.response.code : ''));
-        switch(data.type) {
-          case Hls.ErrorTypes.NETWORK_ERROR:
-            scheduleRetry();
-            break;
-          case Hls.ErrorTypes.MEDIA_ERROR:
-            hls.recoverMediaError();
-            break;
-          default:
-            scheduleRetry();
-            break;
-        }
-      } else {
-        if (data.details === 'bufferStalledError' || data.details === 'bufferSeekOverHole') {
-          setStatus('retry', 'Buffering');
-          onStallDetected();
-          setTimeout(() => { if (video.paused) video.play().catch(()=>{}); }, 300);
-        }
+        statusText.textContent = "Failed: " + ch.name;
+        setDot(idx, 'fail');
       }
     });
 
   } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = STREAM_URL;
-    video.addEventListener('loadedmetadata', function() {
-      setStatus('live', 'Live');
-      video.play().catch(()=>{});
-    });
-    video.addEventListener('error', scheduleRetry);
+    video.src = ch.url;
+    statusText.textContent = "Playing (native): " + ch.name;
+    setDot(idx, 'ok');
+    qualityGroup.innerHTML = '<span class="status">Native player, auto quality</span>';
   } else {
-    setStatus('dead', 'Unsupported browser');
+    statusText.textContent = "HLS not supported";
+    setDot(idx, 'fail');
   }
 }
 
-function scheduleRetry() {
-  setStatus('retry', 'Reconnecting');
-  clearTimeout(retryTimer);
-  retryTimer = setTimeout(() => {
-    retryDelay = Math.min(retryDelay * 1.5, maxRetryDelay);
-    startPlayer();
-  }, retryDelay);
+function buildQualityButtons(levels, lockedIdx){
+  qualityGroup.innerHTML = '';
+
+  const lockLabel = document.createElement('span');
+  lockLabel.className = 'q-btn active';
+  if (levels.length === 0) {
+    lockLabel.textContent = 'Locked (single quality)';
+  } else {
+    const lvl = levels[lockedIdx];
+    const label = lvl.height ? lvl.height + 'p' : Math.round(lvl.bitrate/1000) + 'kbps';
+    lockLabel.textContent = 'Locked: ' + label;
+  }
+  qualityGroup.appendChild(lockLabel);
+
+  const note = document.createElement('span');
+  note.className = 'status';
+  note.textContent = 'Max resolution app এ lock করা, ইউজার পরিবর্তন করতে পারবে না';
+  qualityGroup.appendChild(note);
 }
 
-video.addEventListener('error', () => {
-  const err = video.error;
-  if (err) logDebug('VIDEO ERROR code ' + err.code + ': ' + (err.message || 'unknown'));
-});
-video.addEventListener('waiting', () => setStatus('retry', 'Buffering'));
-video.addEventListener('playing', () => setStatus('live', 'Live'));
-video.addEventListener('stalled', scheduleRetry);
+function setActiveBtn(btn){
+  document.querySelectorAll('.q-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
 
-window.addEventListener('online', () => {
-  setStatus('retry', 'Reconnecting');
-  startPlayer();
-});
-window.addEventListener('offline', () => setStatus('dead', 'No internet'));
-
-unmuteBtn.addEventListener('click', () => {
-  video.muted = !video.muted;
-  unmuteBtn.textContent = video.muted ? 'Unmute' : 'Mute';
-});
-
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && video.paused) {
-    video.play().catch(()=>{});
-  }
-});
-
-startPlayer();
+buildList();
 </script>
 </body>
 </html>
