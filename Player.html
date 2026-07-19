@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Player</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #F4F1EA;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .wrap {
+    width: 100%;
+    max-width: 900px;
+  }
+  .video-box {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: #111;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    font-size: 14px;
+    text-align: center;
+    padding: 20px;
+  }
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+  }
+  .hidden { display: none; }
+  .gear-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    z-index: 5;
+  }
+  .settings-panel {
+    position: absolute;
+    top: 50px;
+    right: 10px;
+    background: rgba(20,20,20,0.92);
+    color: #fff;
+    border-radius: 8px;
+    padding: 10px 12px;
+    width: 200px;
+    z-index: 6;
+  }
+  .settings-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    font-size: 13px;
+  }
+  .settings-row select,
+  .settings-row button {
+    border: none;
+    background: #333;
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 5px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #999;
+    display: inline-block;
+  }
+  .dot.live { background: #2fa84f; }
+  .dot.retry { background: #d9a02f; }
+  .dot.dead { background: #c0392b; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="video-box">
+    <video id="video" playsinline autoplay muted controls></video>
+    <div id="overlay" class="overlay hidden">Reconnecting...</div>
+
+    <button id="gearBtn" class="gear-btn" aria-label="Settings">⚙</button>
+
+    <div id="settingsPanel" class="settings-panel hidden">
+      <div class="settings-row">
+        <span>Status</span>
+        <span><span id="dot" class="dot"></span> <span id="statusText">Connecting</span></span>
+      </div>
+      <div class="settings-row">
+        <span>Quality</span>
+        <select id="qualitySelect">
+          <option value="-1">Auto</option>
+          <option value="audio">Audio Only (data saver)</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <span>Latency</span>
+        <button id="modeBtn">Live</button>
+      </div>
+      <div class="settings-row">
+        <span>Sound</span>
+        <button id="unmuteBtn">Unmute</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const STREAM_URL = "https://live01-cn-ali.bvjicd.com/live/79361366.m3u8";
+const video = document.getElementById('video');
+const overlay = document.getElementById('overlay');
+const dot = document.getElementById('dot');
+const statusText = document.getElementById('statusText');
+const unmuteBtn = document.getElementById('unmuteBtn');
+const qualitySelect = document.getElementById('qualitySelect');
+const modeBtn = document.getElementById('modeBtn');
+const gearBtn = document.getElementById('gearBtn');
+const settingsPanel = document.getElementById('settingsPanel');
+
+gearBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  settingsPanel.classList.toggle('hidden');
+});
+document.addEventListener('click', (e) => {
+  if (!settingsPanel.contains(e.target) && e.target !== gearBtn) {
+    settingsPanel.classList.add('hidden');
+  }
+});
+settingsPanel.addEventListener('click', (e) => e.stopPropagation());
+
+modeBtn.addEventListener('click', () => {
+  userMode = (userMode === 'stable') ? 'live' : 'stable';
+  recentStalls = 0;
+  modeBtn.textContent = userMode === 'stable' ? 'Stable' : 'Live';
+  applyBufferProfile();
+});
+
+function populateQualityOptions() {
+  if (!hls || !hls.levels || hls.levels.length === 0) return;
+  qualitySelect.innerHTML = '<option value="-1">Auto</option>';
+  hls.levels.forEach((level, idx) => {
+    const label = level.height ? level.height + 'p' : Math.round(level.bitrate/1000) + 'kbps';
+    const opt = document.createElement('option');
+    opt.value = idx;
+    opt.textContent = label;
+    qualitySelect.appendChild(opt);
+  });
+  const audioOpt = document.createElement('option');
+  audioOpt.value = 'audio';
+  audioOpt.textContent = 'Audio Only (data saver)';
+  qualitySelect.appendChild(audioOpt);
+  qualitySelect.value = '-1';
+}
+
+qualitySelect.addEventListener('change', () => {
+  if (!hls) return;
+  const val = qualitySelect.value;
+  if (val === 'audio') {
+    video.style.display = 'none';
+    hls.currentLevel = 0;
+    hls.autoLevelCapping = 0;
+  } else {
+    video.style.display = 'block';
+    hls.currentLevel = parseInt(val, 10);
+  }
+});
+
+let hls = null;
+let retryDelay = 1000;
+const maxRetryDelay = 15000;
+let retryTimer = null;
+let lastPlayheadTime = 0;
+let stallCount = 0;
+let watchdogTimer = null;
+let catchUpTimer = null;
+let preemptTimer = null;
+
+let userMode = 'live'; // 'stable' or 'live'
+let recentStalls = 0;
+let stableSince = Date.now();
+
+const PROFILES = {
+  stable: { sync: 15, maxLatency: 35, maxBuf: 60, backBuf: 30 },
+  live:   { sync: 3,  maxLatency: 8,  maxBuf: 12, backBuf: 8 }
+};
+
+function currentProfile() {
+  return PROFILES[userMode];
+}
+
+function applyBufferProfile() {
+  if (!hls) return;
+  const p = currentProfile();
+  hls.config.liveSyncDuration = p.sync;
+  hls.config.liveMaxLatencyDuration = p.maxLatency;
+  hls.config.maxBufferLength = p.maxBuf;
+  hls.config.maxMaxBufferLength = p.maxBuf * 2;
+  hls.config.backBufferLength = p.backBuf;
+}
+
+function onStallDetected() {
+  recentStalls++;
+  stableSince = Date.now();
+  // auto-relax toward stable if user is on live and hitting stalls
+  if (userMode === 'live' && recentStalls >= 2) {
+    userMode = 'stable';
+    modeBtn.textContent = 'Stable (auto)';
+    applyBufferProfile();
+  }
+}
+
+function checkAutoTighten() {
+  // if stable for 90s straight and user hasn't manually forced live, allow tightening back is manual-only
+  if (Date.now() - stableSince > 90000) recentStalls = 0;
+}
+
+function getConnectionSpeed() {
+  const conn = navigator.connection || navigator.webkitConnection || navigator.mozConnection;
+  if (!conn) return 'unknown';
+  return conn.effectiveType || 'unknown';
+}
+
+function shouldLockLowQuality() {
+  const speed = getConnectionSpeed();
+  return speed === '2g' || speed === 'slow-2g' || speed === '3g';
+}
+
+function startWatchdog() {
+  clearInterval(watchdogTimer);
+  watchdogTimer = setInterval(() => {
+    if (video.paused || video.ended) return;
+    const current = video.currentTime;
+    if (Math.abs(current - lastPlayheadTime) < 0.15) {
+      stallCount++;
+      onStallDetected();
+      if (stallCount >= 2) {
+        setStatus('retry', 'Recovering');
+        if (hls) {
+          try {
+            const buffered = video.buffered;
+            if (buffered.length > 0) {
+              const safeSeek = buffered.end(buffered.length - 1) - 1;
+              if (safeSeek > video.currentTime) video.currentTime = safeSeek;
+            }
+          } catch(e) {}
+          if (stallCount >= 4) {
+            stallCount = 0;
+            startPlayer();
+          }
+        }
+      }
+    } else {
+      stallCount = 0;
+    }
+    lastPlayheadTime = current;
+  }, 4000);
+}
+
+function startCatchUp() {
+  clearInterval(catchUpTimer);
+  video.playbackRate = 1.0;
+  catchUpTimer = setInterval(() => {
+    if (video.paused || video.ended || !video.buffered.length) return;
+    try {
+      const bufEnd = video.buffered.end(video.buffered.length - 1);
+      const gap = bufEnd - video.currentTime;
+
+      // gap too small = risk of stutter soon, jump past the hole
+      if (gap < 0.3 && gap >= 0) {
+        const jumpTo = Math.min(bufEnd - 0.05, video.currentTime + 0.5);
+        if (jumpTo > video.currentTime) video.currentTime = jumpTo;
+      }
+    } catch(e) {}
+  }, 1000);
+}
+
+function startPreemptiveGuard() {
+  clearInterval(preemptTimer);
+  preemptTimer = setInterval(() => {
+    if (!hls || !hls.levels || !hls.levels.length) return;
+    if (qualitySelect.value !== '-1') return; // manual override, don't interfere
+
+    const conn = navigator.connection || navigator.webkitConnection;
+    if (!conn || !conn.downlink) return;
+
+    const downlinkBps = conn.downlink * 1000 * 1000; // Mbps -> bps
+    const safeBudget = downlinkBps * 0.6; // 40% safety margin
+
+    const cur = hls.currentLevel >= 0 ? hls.currentLevel : hls.loadLevel;
+    const curLevel = hls.levels[cur];
+    if (!curLevel) return;
+
+    if (curLevel.bitrate > safeBudget) {
+      // step down one level early, before buffer actually starves
+      let target = cur;
+      for (let i = cur; i >= 0; i--) {
+        if (hls.levels[i].bitrate <= safeBudget) { target = i; break; }
+        target = i;
+      }
+      if (target < cur) hls.nextLevel = target;
+    } else if (cur < hls.levels.length - 1) {
+      const nextLevel = hls.levels[cur + 1];
+      if (nextLevel.bitrate <= safeBudget) {
+        hls.nextLevel = cur + 1; // safe to step up
+      }
+    }
+  }, 5000);
+}
+
+function setStatus(state, text) {
+  dot.className = 'dot ' + state;
+  statusText.textContent = text;
+  overlay.classList.toggle('hidden', state !== 'retry');
+}
+
+function startPlayer() {
+  if (hls) { hls.destroy(); hls = null; }
+  clearTimeout(retryTimer);
+  clearInterval(watchdogTimer);
+  clearInterval(catchUpTimer);
+  clearInterval(preemptTimer);
+  stallCount = 0;
+  recentStalls = 0;
+  stableSince = Date.now();
+
+  if (Hls.isSupported()) {
+    const p = currentProfile();
+    hls = new Hls({
+      lowLatencyMode: false,
+      maxBufferLength: p.maxBuf,
+      maxMaxBufferLength: p.maxBuf * 2,
+      maxBufferSize: 60 * 1000 * 1000,
+      liveSyncDuration: p.sync,
+      liveMaxLatencyDuration: p.maxLatency,
+      backBufferLength: p.backBuf,
+      startLevel: 0,
+      abrEwmaDefaultEstimate: 300000,
+      abrBandWidthFactor: 0.7,
+      abrBandWidthUpFactor: 0.5,
+      manifestLoadingMaxRetry: 10,
+      manifestLoadingRetryDelay: 1000,
+      levelLoadingMaxRetry: 10,
+      fragLoadingMaxRetry: 10,
+      fragLoadingRetryDelay: 1000,
+      nudgeMaxRetry: 10
+    });
+
+    hls.loadSource(STREAM_URL);
+    hls.attachMedia(video);
+
+    hls.on(Hls.Events.MANIFEST_PARSED, function() {
+      setStatus('live', 'Live');
+      retryDelay = 1000;
+      if (shouldLockLowQuality()) {
+        hls.currentLevel = 0;
+        hls.autoLevelCapping = 0;
+      }
+      populateQualityOptions();
+      video.play().catch(()=>{});
+      startWatchdog();
+      startCatchUp();
+      startPreemptiveGuard();
+    });
+
+    hls.on(Hls.Events.LEVEL_SWITCHED, function(event, data) {
+      if (qualitySelect.value === '-1') {
+        qualitySelect.dataset.activeLevel = data.level;
+      }
+    });
+
+    hls.on(Hls.Events.ERROR, function(event, data) {
+      if (data.fatal) {
+        setStatus('retry', 'Reconnecting');
+        switch(data.type) {
+          case Hls.ErrorTypes.NETWORK_ERROR:
+            scheduleRetry();
+            break;
+          case Hls.ErrorTypes.MEDIA_ERROR:
+            hls.recoverMediaError();
+            break;
+          default:
+            scheduleRetry();
+            break;
+        }
+      } else {
+        if (data.details === 'bufferStalledError' || data.details === 'bufferSeekOverHole') {
+          setStatus('retry', 'Buffering');
+          onStallDetected();
+          setTimeout(() => { if (video.paused) video.play().catch(()=>{}); }, 300);
+        }
+      }
+    });
+
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = STREAM_URL;
+    video.addEventListener('loadedmetadata', function() {
+      setStatus('live', 'Live');
+      video.play().catch(()=>{});
+    });
+    video.addEventListener('error', scheduleRetry);
+  } else {
+    setStatus('dead', 'Unsupported browser');
+  }
+}
+
+function scheduleRetry() {
+  setStatus('retry', 'Reconnecting');
+  clearTimeout(retryTimer);
+  retryTimer = setTimeout(() => {
+    retryDelay = Math.min(retryDelay * 1.5, maxRetryDelay);
+    startPlayer();
+  }, retryDelay);
+}
+
+video.addEventListener('waiting', () => setStatus('retry', 'Buffering'));
+video.addEventListener('playing', () => setStatus('live', 'Live'));
+video.addEventListener('stalled', scheduleRetry);
+
+window.addEventListener('online', () => {
+  setStatus('retry', 'Reconnecting');
+  startPlayer();
+});
+window.addEventListener('offline', () => setStatus('dead', 'No internet'));
+
+unmuteBtn.addEventListener('click', () => {
+  video.muted = !video.muted;
+  unmuteBtn.textContent = video.muted ? 'Unmute' : 'Mute';
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && video.paused) {
+    video.play().catch(()=>{});
+  }
+});
+
+startPlayer();
+</script>
+</body>
+</html>
