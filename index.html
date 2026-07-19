@@ -2,261 +2,320 @@
 <html lang="bn">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Channel Demo Player</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Mobile Stream Player</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
 <style>
-  :root{
-    --bg:#f5f6f8;
-    --panel:#ffffff;
-    --border:#e2e5ea;
-    --text:#1a1d23;
-    --muted:#6b7280;
-    --accent:#2563eb;
-    --green:#16a34a;
-    --red:#dc2626;
+  :root {
+    --bg: #F2F2F7;
+    --panel: #FFFFFF;
+    --border: rgba(60, 60, 67, 0.08);
+    --text: #1C1C1E;
+    --muted: #8E8E93;
+    --accent: #007AFF;
+    --green: #34C759;
+    --red: #FF3B30;
+    
+    --radius-lg: 20px;
+    --radius-md: 16px;
+    --radius-sm: 10px;
   }
-  *{box-sizing:border-box;}
-  body{
-    margin:0;
-    background:var(--bg);
-    color:var(--text);
-    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    padding:16px;
+
+  * { 
+    box-sizing: border-box; 
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
   }
-  .wrap{
-    max-width:900px;
-    margin:0 auto;
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    padding: 20px 16px 40px;
   }
-  h1{
-    font-size:18px;
-    font-weight:600;
-    margin:0 0 4px;
+
+  .wrap {
+    max-width: 600px;
+    margin: 0 auto;
   }
-  p.sub{
-    margin:0 0 16px;
-    color:var(--muted);
-    font-size:13px;
+
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0 0 20px;
+    color: var(--text);
   }
-  .layout{
-    display:flex;
-    gap:16px;
-    flex-wrap:wrap;
+
+  /* Player Architecture */
+  .player-box {
+    position: relative;
+    background: #000000;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.08);
+    margin-bottom: 20px;
+    transform: translateZ(0); /* Hardware acceleration for mobile */
   }
-  .player-col{
-    flex:1 1 380px;
-    min-width:280px;
+
+  video {
+    width: 100%;
+    display: block;
+    background: #000000;
+    aspect-ratio: 16/9;
   }
-  .list-col{
-    flex:1 1 260px;
-    min-width:240px;
+
+  /* Cold Start Empty State */
+  .cold-start {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1C1C1E 0%, #000000 100%);
+    z-index: 5;
+    transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  .player-box{
-    position:relative;
-    background:#000;
-    border-radius:10px;
-    overflow:hidden;
-    border:1px solid var(--border);
+  
+  .cold-start.hidden {
+    opacity: 0;
+    pointer-events: none;
   }
-  video{
-    width:100%;
-    display:block;
-    background:#000;
-    aspect-ratio:16/9;
+
+  .cold-start svg {
+    width: 48px;
+    height: 48px;
+    fill: rgba(255, 255, 255, 0.2);
+    margin-bottom: 12px;
   }
-  .spinner-overlay{
-    position:absolute;
-    inset:0;
-    background:rgba(0,0,0,0.55);
-    display:none;
-    align-items:center;
-    justify-content:center;
-    flex-direction:column;
-    gap:10px;
-    color:#fff;
-    font-size:13px;
+
+  /* Spatial Overlays */
+  .spinner-overlay, .error-overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 10;
   }
-  .spinner-overlay.show{display:flex;}
-  .spinner{
-    width:34px;height:34px;
-    border:3px solid rgba(255,255,255,0.25);
-    border-top-color:#fff;
-    border-radius:50%;
-    animation:spin 0.8s linear infinite;
+
+  .spinner-overlay { background: rgba(0, 0, 0, 0.25); }
+  .error-overlay { background: rgba(0, 0, 0, 0.65); padding: 24px; text-align: center; }
+
+  .spinner-overlay.show, .error-overlay.show { display: flex; }
+
+  .spinner {
+    width: 44px; height: 44px;
+    border: 3px solid rgba(255, 255, 255, 0.15);
+    border-top-color: #FFFFFF;
+    border-radius: 50%;
+    animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   }
-  @keyframes spin{ to { transform:rotate(360deg); } }
-  .error-overlay{
-    position:absolute;
-    inset:0;
-    background:rgba(20,20,20,0.85);
-    display:none;
-    align-items:center;
-    justify-content:center;
-    flex-direction:column;
-    gap:8px;
-    color:#fff;
-    text-align:center;
-    padding:20px;
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-overlay .msg {
+    font-size: 16px; 
+    font-weight: 500;
+    color: #FFFFFF;
   }
-  .error-overlay.show{display:flex;}
-  .error-overlay .msg{font-size:13px; color:#f3f4f6;}
-  .retry-btn{
-    background:var(--accent);
-    color:#fff;
-    border:none;
-    padding:7px 16px;
-    border-radius:6px;
-    font-size:12px;
-    cursor:pointer;
+
+  .retry-btn {
+    background: #FFFFFF;
+    color: #000000;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 100px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
   }
-  .controls{
-    background:var(--panel);
-    border:1px solid var(--border);
-    border-top:none;
-    border-radius:0 0 10px 10px;
-    padding:10px 12px;
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    flex-wrap:wrap;
-    gap:8px;
-    font-size:12px;
+
+  /* Minimalist Control Panel */
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px 20px;
   }
-  .quality-group{
-    display:flex;
-    gap:6px;
-    flex-wrap:wrap;
+
+  .quality-group { display: flex; gap: 8px; align-items: center; }
+
+  span.q-btn {
+    background: rgba(0, 122, 255, 0.1);
+    color: var(--accent);
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
   }
-  button.q-btn{
-    background:var(--bg);
-    border:1px solid var(--border);
-    color:var(--text);
-    padding:5px 10px;
-    border-radius:6px;
-    font-size:12px;
-    cursor:pointer;
+
+  .status {
+    font-size: 15px;
+    color: var(--text);
+    font-weight: 600;
   }
-  button.q-btn.active{
-    background:var(--accent);
-    color:#fff;
-    border-color:var(--accent);
+
+  /* iOS Toggle Switch - Ergonomic Size */
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--panel);
+    padding: 18px 20px;
+    border-radius: var(--radius-md);
+    margin-bottom: 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
   }
-  .status{
-    font-size:12px;
-    color:var(--muted);
+
+  .setting-label {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text);
   }
-  .save-toggle{
-    display:flex;
-    align-items:center;
-    gap:6px;
-    font-size:12px;
-    color:var(--muted);
-    margin:10px 0;
-    background:var(--panel);
-    border:1px solid var(--border);
-    padding:8px 10px;
-    border-radius:8px;
+
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 30px;
   }
-  .channel-list{
-    background:var(--panel);
-    border:1px solid var(--border);
-    border-radius:10px;
-    overflow:hidden;
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #E5E5EA;
+    transition: .3s;
+    border-radius: 30px;
   }
-  .channel-item{
-    display:flex;
-    align-items:center;
-    gap:8px;
-    padding:12px;
-    border-bottom:1px solid var(--border);
-    border-left:3px solid transparent;
-    cursor:pointer;
-    font-size:13px;
-    transition:background 0.15s ease, border-left-color 0.15s ease;
+  .slider:before {
+    position: absolute; content: "";
+    height: 26px; width: 26px;
+    left: 2px; bottom: 2px;
+    background-color: white;
+    transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
   }
-  .channel-item:last-child{border-bottom:none;}
-  .channel-item:hover{background:var(--bg);}
-  .channel-item.active{
-    background:#eef2ff;
-    border-left-color:var(--accent);
-    font-weight:600;
+  input:checked + .slider { background-color: var(--green); }
+  input:checked + .slider:before { transform: translateX(20px); }
+
+  /* List Navigation - Thumb Optimized */
+  .channel-list {
+    background: var(--panel);
+    border-radius: var(--radius-lg);
+    padding: 8px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.03);
   }
-  .now-playing{
-    font-size:9px;
-    color:#fff;
-    background:var(--accent);
-    padding:2px 6px;
-    border-radius:4px;
+
+  .channel-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  .dot{
-    width:8px;height:8px;border-radius:50%;
-    background:var(--muted);
-    flex-shrink:0;
+  
+  .channel-item:active { 
+    transform: scale(0.97); 
+    background: var(--bg); 
   }
-  .dot.ok{background:var(--green);}
-  .dot.fail{background:var(--red);}
-  .ch-name{flex:1;}
-  .ch-tag{
-    font-size:10px;
-    color:var(--muted);
-    background:var(--bg);
-    padding:2px 6px;
-    border-radius:4px;
+  
+  .channel-item.active { 
+    background: rgba(0, 122, 255, 0.08); 
+    color: var(--accent); 
+    font-weight: 600; 
   }
-  .log{
-    margin-top:12px;
-    background:var(--panel);
-    border:1px solid var(--border);
-    border-radius:8px;
-    padding:10px 12px;
-    font-size:11px;
-    color:var(--muted);
-    max-height:110px;
-    overflow-y:auto;
-    font-family:monospace;
+
+  .dot-container {
+    width: 10px; height: 10px;
+    display: flex; justify-content: center; align-items: center;
   }
-  @media (max-width:640px){
-    .layout{flex-direction:column;}
+
+  .dot {
+    width: 8px; height: 8px; 
+    border-radius: 50%;
+    background: var(--muted);
+    transition: all 0.3s ease;
   }
+
+  .channel-item.active .dot { background: var(--accent); }
+  
+  .dot.live {
+    background: var(--red);
+    box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.7);
+    animation: pulse 1.5s infinite cubic-bezier(0.66, 0, 0, 1);
+  }
+
+  @keyframes pulse { to { box-shadow: 0 0 0 8px rgba(255, 59, 48, 0); } }
+
+  .ch-name { flex: 1; }
+
+  /* Developer Log */
+  .log {
+    margin-top: 24px;
+    background: #1C1C1E;
+    color: #34C759;
+    border-radius: var(--radius-md);
+    padding: 16px;
+    font-size: 12px;
+    max-height: 100px;
+    overflow-y: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    opacity: 0.8;
+  }
+
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Channel Demo Player</h1>
-  <p class="sub">লিস্ট থেকে চ্যানেল সিলেক্ট করো। Low-data mode ডিফল্ট অন।</p>
+  <h1>Channels</h1>
 
-  <div class="layout">
-    <div class="player-col">
-      <div class="player-box">
-        <video id="video" controls playsinline></video>
-        <div class="spinner-overlay" id="spinnerOverlay">
-          <div class="spinner"></div>
-          <div id="spinnerText">লোড হচ্ছে...</div>
-        </div>
-        <div class="error-overlay" id="errorOverlay">
-          <div class="msg" id="errorMsg">এই চ্যানেল এখন চলছে না।</div>
-          <button class="retry-btn" id="retryBtn">আবার চেষ্টা করো</button>
-        </div>
-      </div>
-      <div class="controls">
-        <div class="quality-group" id="qualityGroup">
-          <span class="status">চ্যানেল সিলেক্ট করো</span>
-        </div>
-        <div class="status" id="statusText">Idle</div>
-      </div>
-
-      <label class="save-toggle">
-        <input type="checkbox" id="dataSaver" checked>
-        Low-data mode (ছোট quality দিয়ে শুরু হবে, মোবাইল কম গরম হবে)
-      </label>
-
-      <div class="log" id="log"></div>
+  <div class="player-box">
+    <div class="cold-start" id="coldStart">
+      <svg viewBox="0 0 24 24">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+      </svg>
     </div>
-
-    <div class="list-col">
-      <div class="channel-list" id="channelList"></div>
+    <video id="video" controls playsinline></video>
+    <div class="spinner-overlay" id="spinnerOverlay">
+      <div class="spinner"></div>
+    </div>
+    <div class="error-overlay" id="errorOverlay">
+      <div class="msg" id="errorMsg">Stream Unavailable</div>
+      <button class="retry-btn" id="retryBtn">Retry</button>
     </div>
   </div>
+  
+  <div class="controls">
+    <div class="status" id="statusText">Ready</div>
+    <div class="quality-group" id="qualityGroup"></div>
+  </div>
+
+  <div class="setting-row">
+    <span class="setting-label">Low Data Mode</span>
+    <label class="switch">
+      <input type="checkbox" id="dataSaver" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="channel-list" id="channelList"></div>
+
+  <div class="log" id="log">System ready.<br></div>
 </div>
 
 <script>
@@ -271,27 +330,23 @@ const qualityGroup = document.getElementById('qualityGroup');
 const statusText = document.getElementById('statusText');
 const logBox = document.getElementById('log');
 const channelListEl = document.getElementById('channelList');
-const dataSaverBox = document.getElementById('dataSaver');
 const spinnerOverlay = document.getElementById('spinnerOverlay');
-const spinnerText = document.getElementById('spinnerText');
 const errorOverlay = document.getElementById('errorOverlay');
-const errorMsg = document.getElementById('errorMsg');
+const coldStart = document.getElementById('coldStart');
 const retryBtn = document.getElementById('retryBtn');
 
 let hls = null;
 let activeIndex = -1;
 let channelItems = [];
 
-function showSpinner(text){
-  spinnerText.textContent = text || 'লোড হচ্ছে...';
+function showSpinner(){
   spinnerOverlay.classList.add('show');
   errorOverlay.classList.remove('show');
 }
 function hideSpinner(){
   spinnerOverlay.classList.remove('show');
 }
-function showError(text){
-  errorMsg.textContent = text || 'এই চ্যানেল এখন চলছে না।';
+function showError(){
   errorOverlay.classList.add('show');
   spinnerOverlay.classList.remove('show');
 }
@@ -303,7 +358,7 @@ retryBtn.onclick = () => {
 };
 
 function log(msg){
-  const t = new Date().toLocaleTimeString();
+  const t = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
   logBox.innerHTML += `[${t}] ${msg}<br>`;
   logBox.scrollTop = logBox.scrollHeight;
 }
@@ -313,9 +368,8 @@ function buildList(){
     const item = document.createElement('div');
     item.className = 'channel-item';
     item.innerHTML = `
-      <span class="dot" id="dot-${idx}"></span>
+      <div class="dot-container"><span class="dot" id="dot-${idx}"></span></div>
       <span class="ch-name">${ch.name}</span>
-      <span class="ch-tag" id="tag-${idx}">LIVE</span>
     `;
     item.onclick = () => loadChannel(idx);
     channelListEl.appendChild(item);
@@ -326,37 +380,31 @@ function buildList(){
 function setActiveItem(idx){
   channelItems.forEach((el, i) => {
     el.classList.remove('active');
-    const tag = document.getElementById('tag-' + i);
-    if (tag) { tag.textContent = 'LIVE'; tag.classList.remove('now-playing'); }
+    const dot = document.getElementById('dot-' + i);
+    if (dot) dot.classList.remove('live');
   });
   if (idx >= 0) {
     channelItems[idx].classList.add('active');
-    const tag = document.getElementById('tag-' + idx);
-    if (tag) { tag.textContent = '▶ Playing'; tag.classList.add('now-playing'); }
   }
 }
 
-function setDot(idx, state){
+function setLiveStatus(idx){
   const dot = document.getElementById('dot-' + idx);
-  if (!dot) return;
-  dot.classList.remove('ok','fail');
-  if (state) dot.classList.add(state);
+  if (dot) dot.classList.add('live');
 }
 
 function loadChannel(idx){
   activeIndex = idx;
   setActiveItem(idx);
+  coldStart.classList.add('hidden'); // Clear the cold start graphic
   const ch = CHANNELS[idx];
-  statusText.textContent = "Connecting...";
-  qualityGroup.innerHTML = '<span class="status">লোড হচ্ছে...</span>';
-  log("Loading: " + ch.name);
-  showSpinner('Connecting: ' + ch.name);
+  statusText.textContent = ch.name;
+  qualityGroup.innerHTML = '';
+  log("Connecting: " + ch.name);
+  showSpinner();
   hideError();
 
-  if (hls) {
-    hls.destroy();
-    hls = null;
-  }
+  if (hls) { hls.destroy(); hls = null; }
 
   if (Hls.isSupported()) {
     hls = new Hls({
@@ -379,96 +427,43 @@ function loadChannel(idx){
       video.removeEventListener('canplay', jumpToLive);
     });
 
-    if (window._syncInterval) clearInterval(window._syncInterval);
-    window._syncInterval = setInterval(() => {
-      if (!video.duration || !isFinite(video.duration)) return;
-      const gap = video.duration - video.currentTime;
-      if (gap > 6) {
-        video.currentTime = video.duration - 1;
-        log("Delay বেশি হয়ে গেছিলো, live edge এ জাম্প করা হলো");
-      } else if (gap > 3) {
-        video.playbackRate = 1.08;
-      } else {
-        video.playbackRate = 1.0;
-      }
-    }, 3000);
-
     hls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
-      statusText.textContent = "Playing (144p locked): " + ch.name;
-      setDot(idx, 'ok');
-      log("Manifest loaded. Levels: " + data.levels.length);
-
-      let lowestIdx = 0;
-      let lowestHeight = Infinity;
+      setLiveStatus(idx);
+      let lowestIdx = 0, lowestHeight = Infinity;
       data.levels.forEach((lvl, i) => {
         const h = lvl.height || Infinity;
-        if (h < lowestHeight) {
-          lowestHeight = h;
-          lowestIdx = i;
-        }
+        if (h < lowestHeight) { lowestHeight = h; lowestIdx = i; }
       });
       hls.currentLevel = lowestIdx;
       hls.autoLevelCapping = lowestIdx;
-      log("Locked to lowest level: index " + lowestIdx + " (" + (lowestHeight === Infinity ? "unknown" : lowestHeight + "p") + ")");
 
-      buildQualityButtons(data.levels, lowestIdx);
+      if(data.levels.length > 0) {
+        const h = data.levels[lowestIdx].height;
+        const label = h ? h + 'p' : 'Auto';
+        qualityGroup.innerHTML = `<span class="q-btn">${label} HD</span>`;
+      }
+      
       hideSpinner();
-      video.play().catch(e => log("Tap play to start (autoplay blocked)."));
-    });
-
-    hls.on(Hls.Events.LEVEL_SWITCHED, function(event, data) {
-      log("Quality switched to level " + data.level);
+      video.play().catch(e => log("Autoplay blocked. Tap to play."));
     });
 
     hls.on(Hls.Events.ERROR, function(event, data) {
-      log("ERROR (" + ch.name + "): " + data.type + " - " + data.details);
-      if (data.fatal) {
-        statusText.textContent = "Failed: " + ch.name;
-        setDot(idx, 'fail');
-        showError('"' + ch.name + '" এখন চলছে না। লিংক dead অথবা ব্লকড হতে পারে।');
-      }
+      if (data.fatal) { statusText.textContent = "Offline"; showError(); }
     });
 
-    video.addEventListener('waiting', () => showSpinner('Buffering...'));
+    video.addEventListener('waiting', () => showSpinner());
     video.addEventListener('playing', () => hideSpinner());
 
   } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
     video.src = ch.url;
-    statusText.textContent = "Playing (native): " + ch.name;
-    setDot(idx, 'ok');
-    qualityGroup.innerHTML = '<span class="status">Native player, auto quality</span>';
+    setLiveStatus(idx);
+    qualityGroup.innerHTML = '<span class="q-btn">Native HLS</span>';
     video.addEventListener('canplay', () => hideSpinner(), { once:true });
-    video.addEventListener('error', () => showError('"' + ch.name + '" এখন চলছে না।'));
+    video.addEventListener('error', () => showError());
   } else {
-    statusText.textContent = "HLS not supported";
-    setDot(idx, 'fail');
-    showError('তোমার ব্রাউজার এই ফরম্যাট সাপোর্ট করে না।');
+    statusText.textContent = "Unsupported";
+    showError();
   }
-}
-
-function buildQualityButtons(levels, lockedIdx){
-  qualityGroup.innerHTML = '';
-
-  const lockLabel = document.createElement('span');
-  lockLabel.className = 'q-btn active';
-  if (levels.length === 0) {
-    lockLabel.textContent = 'Locked (single quality)';
-  } else {
-    const lvl = levels[lockedIdx];
-    const label = lvl.height ? lvl.height + 'p' : Math.round(lvl.bitrate/1000) + 'kbps';
-    lockLabel.textContent = 'Locked: ' + label;
-  }
-  qualityGroup.appendChild(lockLabel);
-
-  const note = document.createElement('span');
-  note.className = 'status';
-  note.textContent = 'Max resolution app এ lock করা, ইউজার পরিবর্তন করতে পারবে না';
-  qualityGroup.appendChild(note);
-}
-
-function setActiveBtn(btn){
-  document.querySelectorAll('.q-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
 }
 
 buildList();
