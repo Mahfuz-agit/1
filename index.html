@@ -133,6 +133,7 @@
       </div>
     </div>
   </div>
+  <div id="debugLog" style="margin-top:10px; font-size:11px; color:#555; background:#eee; border-radius:6px; padding:8px; max-height:120px; overflow-y:auto; white-space:pre-wrap; font-family:monospace;"></div>
 </div>
 
 <script>
@@ -146,6 +147,12 @@ const qualitySelect = document.getElementById('qualitySelect');
 const modeBtn = document.getElementById('modeBtn');
 const gearBtn = document.getElementById('gearBtn');
 const settingsPanel = document.getElementById('settingsPanel');
+const debugLog = document.getElementById('debugLog');
+
+function logDebug(msg) {
+  const time = new Date().toLocaleTimeString();
+  debugLog.textContent = `[${time}] ${msg}\n` + debugLog.textContent;
+}
 
 gearBtn.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -377,6 +384,7 @@ function startPlayer() {
 
     hls.loadSource(STREAM_URL);
     hls.attachMedia(video);
+    logDebug('hls.js attached, loading manifest...');
 
     hls.on(Hls.Events.MANIFEST_PARSED, function() {
       setStatus('live', 'Live');
@@ -401,6 +409,7 @@ function startPlayer() {
     hls.on(Hls.Events.ERROR, function(event, data) {
       if (data.fatal) {
         setStatus('retry', 'Reconnecting');
+        logDebug('FATAL: ' + data.type + ' / ' + data.details + (data.response ? ' / status ' + data.response.code : ''));
         switch(data.type) {
           case Hls.ErrorTypes.NETWORK_ERROR:
             scheduleRetry();
@@ -442,6 +451,10 @@ function scheduleRetry() {
   }, retryDelay);
 }
 
+video.addEventListener('error', () => {
+  const err = video.error;
+  if (err) logDebug('VIDEO ERROR code ' + err.code + ': ' + (err.message || 'unknown'));
+});
 video.addEventListener('waiting', () => setStatus('retry', 'Buffering'));
 video.addEventListener('playing', () => setStatus('live', 'Live'));
 video.addEventListener('stalled', scheduleRetry);
