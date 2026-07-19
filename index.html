@@ -320,11 +320,45 @@
 
 <script>
 const CHANNELS = [
-  { name: "Channel 2", url: "https://pull.niues.live/live/stream-9912060_lhd.m3u8" },
-  { name: "Channel 6", url: "https://live01-cn-ali.bvjicd.com/live/79361366.m3u8" },
-  { name: "Channel 13", url: "https://compression-burning-jacksonville-everywhere.trycloudflare.com/output.m3u8" }
-];
+  {
+    name: "Channel 2",
+    url: "https://pull.niues.live/live/stream-9912060_lhd.m3u8"
+  },
+  {
+    name: "Channel 6",
+    url: "https://live01-cn-ali.bvjicd.com/live/79361366.m3u8"
+  },
+  {
+    name: "Channel 13",
+    url: "https://compression-burning-jacksonville-everywhere.trycloudflare.com/output.m3u8"
+  },
 
+  // Added channels
+  {
+    name: "DeepTo TV",
+    url: "https://byphdgllyk.gpcdn.net/hls/deeptotv/0_1/index.m3u8"
+  },
+  {
+    name: "Channel 63",
+    url: "http://206.212.244.63/63/index.m3u8"
+  },
+  {
+    name: "StarHub Stream",
+    url: "http://starhub.pro/live/farhat-3379/67897-913379/744517.ts"
+  },
+  {
+    name: "Channel 557A",
+    url: "http://145.239.5.177/557a/index.m3u8"
+  },
+  {
+    name: "BTV",
+    url: "http://103.165.93.31:8095/btv/tracks-v1a1/mono.m3u8"
+  },
+  {
+    name: "T Sports",
+    url: "http://103.165.93.31:8095/tsports/video.m3u8"
+  }
+];
 const video = document.getElementById('video');
 const qualityGroup = document.getElementById('qualityGroup');
 const statusText = document.getElementById('statusText');
